@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plataforma de Gestión de Marketing</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Fuente Inter de Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 sm:p-8">
+
+    <!-- Navbar and User Info -->
+    <div class="w-full max-w-6xl bg-white rounded-xl shadow-lg p-4 sm:p-6 flex flex-col sm:flex-row justify-between items-center mb-6">
+        <div class="flex items-center space-x-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-indigo-600" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h2v-6h-2v6zm0-8h2V7h-2v2z"/>
+            </svg>
+            <h1 class="text-xl sm:text-2xl font-bold text-indigo-800">Panel de Gestión de Marketing</h1>
+        </div>
+        <div id="user-info" class="text-sm mt-4 sm:mt-0 sm:text-base font-semibold text-gray-600">
+            <p>Cargando usuario...</p>
+        </div>
+    </div>
+    
+    <!-- Modal para notificaciones -->
+    <div id="modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800" id="modal-title">Notificación</h3>
+                <button onclick="hideModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <p class="text-gray-700 mb-4" id="modal-message"></p>
+            <div class="flex justify-end">
+                <button onclick="hideModal()" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-6xl flex flex-col md:flex-row gap-6">
+
+        <!-- Formulario para gestores -->
+        <div id="gestor-form-section" class="w-full md:w-1/2 lg:w-2/5 bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6">
+            <h2 class="text-lg sm:text-xl font-semibold text-indigo-800 mb-4">Enviar Requerimiento</h2>
+            <form id="requerimiento-form" class="space-y-4">
+                <div>
+                    <label for="titulo" class="block text-sm font-medium text-gray-700">Título del Requerimiento</label>
+                    <input type="text" id="titulo" name="titulo" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500" required>
+                </div>
+                <div>
+                    <label for="descripcion" class="block text-sm font-medium text-gray-700">Descripción</label>
+                    <textarea id="descripcion" name="descripcion" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500" required></textarea>
+                </div>
+                <div>
+                    <label for="imagen" class="block text-sm font-medium text-gray-700">Subir Imagen</label>
+                    <input type="file" id="imagen" name="imagen" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" accept="image/*" required>
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
+                    <span id="submit-text">Enviar</span>
+                    <span id="loading-spinner" class="hidden animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mx-auto"></span>
+                </button>
+            </form>
+        </div>
+
+        <!-- Dashboard para el administrador -->
+        <div id="admin-dashboard-section" class="w-full md:w-1/2 lg:w-3/5 bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6 hidden">
+            <h2 class="text-lg sm:text-xl font-semibold text-indigo-800 mb-4">Dashboard de Aprobaciones</h2>
+            <div id="user-requests-list" class="space-y-4">
+                <!-- Requests will be injected here by JavaScript -->
+                <p class="text-gray-500">No hay requerimientos pendientes.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendario de publicaciones -->
+    <div id="calendar-section" class="w-full max-w-6xl bg-white rounded-xl shadow-lg p-4 sm:p-6 hidden">
+        <h2 class="text-lg sm:text-xl font-semibold text-indigo-800 mb-4">Calendario de Publicaciones</h2>
+        <div class="overflow-x-auto">
+            <div id="calendar-view" class="grid grid-cols-7 gap-1 text-center font-bold text-sm sm:text-base">
+                <div class="py-2 text-indigo-600">Dom</div>
+                <div class="py-2 text-indigo-600">Lun</div>
+                <div class="py-2 text-indigo-600">Mar</div>
+                <div class="py-2 text-indigo-600">Mié</div>
+                <div class="py-2 text-indigo-600">Jue</div>
+                <div class="py-2 text-indigo-600">Vie</div>
+                <div class="py-2 text-indigo-600">Sáb</div>
+            </div>
+            <div id="calendar-days" class="grid grid-cols-7 gap-1">
+                <!-- Calendar days will be injected here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
+        import { getApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+
+        // Firebase configuration and initialization (DO NOT MODIFY)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : '';
+
+        let app;
+        let db;
+        let auth;
+        let storage;
+        let userId = 'unknown';
+        let userRole = 'unknown';
+
+        const initializeFirebase = async () => {
+            try {
+                // Check if an app is already initialized
+                app = getApp();
+            } catch (e) {
+                // If not, initialize a new app
+                app = initializeApp(firebaseConfig);
+            }
+            db = getFirestore(app);
+            auth = getAuth(app);
+            storage = getStorage(app);
+
+            // Authentication with custom token or anonymously
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Firebase Auth Error:", error);
+            }
+
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    userId = user.uid;
+                    // For demo purposes, we define roles based on user ID.
+                    // In a real app, this would be retrieved from a database.
+                    userRole = (userId === 'admin-id-demo') ? 'administrador' : 'gestor';
+                    document.getElementById('user-info').innerText = `ID de Usuario: ${userId}\nRol: ${userRole}`;
+                    
+                    if (userRole === 'administrador') {
+                        document.getElementById('admin-dashboard-section').classList.remove('hidden');
+                        document.getElementById('gestor-form-section').classList.add('hidden');
+                        document.getElementById('calendar-section').classList.remove('hidden');
+                        listenForRequests();
+                    } else {
+                        document.getElementById('gestor-form-section').classList.remove('hidden');
+                    }
+                }
+            });
+        };
+
+        const showModal = (title, message) => {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('modal').classList.add('flex');
+        };
+
+        const hideModal = () => {
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modal').classList.remove('flex');
+        };
+
+        document.getElementById('requerimiento-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const form = e.target;
+            const titulo = form.titulo.value;
+            const descripcion = form.descripcion.value;
+            const imagenFile = form.imagen.files[0];
+
+            if (!imagenFile) {
+                showModal('Error', 'Por favor, sube una imagen.');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submit-text');
+            const loadingSpinner = document.getElementById('loading-spinner');
+            submitBtn.innerText = 'Enviando...';
+            loadingSpinner.classList.remove('hidden');
+            
+            try {
+                // Upload image to Firebase Storage
+                const storageRef = ref(storage, `contenido/${userId}/${Date.now()}_${imagenFile.name}`);
+                await uploadBytes(storageRef, imagenFile);
+                const imageUrl = await getDownloadURL(storageRef);
+
+                // Add document to Firestore
+                const docRef = doc(collection(db, `/artifacts/${appId}/users/${userId}/requerimientos`));
+                await setDoc(docRef, {
+                    id: docRef.id,
+                    titulo,
+                    descripcion,
+                    solicitanteId: userId,
+                    solicitanteEmail: auth.currentUser.email || 'correo-no-disponible',
+                    imagenUrl: imageUrl,
+                    aprobado: false,
+                    fechaCreacion: new Date()
+                });
+
+                showModal('¡Éxito!', 'Tu requerimiento ha sido enviado para aprobación.');
+                form.reset();
+            } catch (error) {
+                console.error("Error al enviar el requerimiento:", error);
+                showModal('Error', 'Hubo un error al enviar el requerimiento. Por favor, inténtalo de nuevo.');
+            } finally {
+                submitBtn.innerText = 'Enviar';
+                loadingSpinner.classList.add('hidden');
+            }
+        });
+
+        // Function to listen for real-time updates from Firestore
+        const listenForRequests = () => {
+            const requestsList = document.getElementById('user-requests-list');
+            const collectionRef = collection(db, `/artifacts/${appId}/users/${userId}/requerimientos`);
+            const q = query(collectionRef);
+
+            onSnapshot(q, (snapshot) => {
+                requestsList.innerHTML = '';
+                const requests = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                if (requests.length === 0) {
+                    requestsList.innerHTML = '<p class="text-gray-500">No hay requerimientos pendientes.</p>';
+                    updateCalendar([]);
+                    return;
+                }
+                
+                requests.sort((a, b) => b.fechaCreacion.toDate() - a.fechaCreacion.toDate());
+
+                requests.forEach(req => {
+                    const statusColor = req.aprobado ? 'text-green-600' : 'text-yellow-600';
+                    const statusText = req.aprobado ? 'Aprobado' : 'Pendiente';
+
+                    const reqCard = document.createElement('div');
+                    reqCard.className = 'bg-gray-50 rounded-lg p-4 shadow flex flex-col sm:flex-row justify-between items-start sm:items-center';
+                    reqCard.innerHTML = `
+                        <div>
+                            <p class="font-bold text-gray-800 text-lg">${req.titulo}</p>
+                            <p class="text-gray-600 text-sm mb-2">${req.descripcion}</p>
+                            <p class="text-xs font-medium text-gray-400">Solicitado por: ${req.solicitanteEmail}</p>
+                            <a href="${req.imagenUrl}" target="_blank" class="text-sm text-blue-500 hover:underline">Ver Imagen</a>
+                        </div>
+                        <div class="mt-4 sm:mt-0 flex items-center space-x-2">
+                            <span class="font-semibold ${statusColor}">${statusText}</span>
+                            <button onclick="toggleApproval('${req.id}', ${req.aprobado})" class="bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-lg hover:bg-gray-300">
+                                ${req.aprobado ? 'Marcar como Pendiente' : 'Aprobar'}
+                            </button>
+                        </div>
+                    `;
+                    requestsList.appendChild(reqCard);
+                });
+                
+                updateCalendar(requests);
+            });
+        };
+
+        const updateCalendar = (requests) => {
+            const calendarDays = document.getElementById('calendar-days');
+            calendarDays.innerHTML = '';
+            
+            const today = new Date();
+            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            const startingDay = firstDayOfMonth.getDay();
+            const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+            
+            for (let i = 0; i < startingDay; i++) {
+                calendarDays.innerHTML += '<div></div>';
+            }
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayDiv = document.createElement('div');
+                const currentDate = new Date(today.getFullYear(), today.getMonth(), day);
+                dayDiv.className = 'p-2 text-center border rounded-lg hover:bg-gray-100 transition-colors cursor-pointer';
+                
+                let events = [];
+                let hasApproved = false;
+                
+                requests.forEach(req => {
+                    const reqDate = req.fechaCreacion.toDate();
+                    if (reqDate.getDate() === day && reqDate.getMonth() === today.getMonth() && reqDate.getFullYear() === today.getFullYear()) {
+                        events.push(req);
+                        if (req.aprobado) {
+                            hasApproved = true;
+                        }
+                    }
+                });
+
+                let content = `<span class="font-bold">${day}</span>`;
+                if (events.length > 0) {
+                    const isToday = currentDate.toDateString() === today.toDateString();
+                    dayDiv.classList.add(isToday ? 'bg-indigo-100' : hasApproved ? 'bg-green-100' : 'bg-yellow-100');
+                    dayDiv.classList.add('border-indigo-500');
+                    content += `<div class="mt-1 text-xs text-gray-500">${events.length} req</div>`;
+                }
+
+                dayDiv.innerHTML = content;
+                dayDiv.title = `Requerimientos para el día ${day}: ${events.length}`;
+                
+                calendarDays.appendChild(dayDiv);
+            }
+        };
+
+        // This function will be called by the button in the dashboard
+        window.toggleApproval = async (id, currentStatus) => {
+            try {
+                const docRef = doc(db, `/artifacts/${appId}/users/${userId}/requerimientos`, id);
+                await updateDoc(docRef, { aprobado: !currentStatus });
+                showModal('Actualización', `El estado del requerimiento ha sido cambiado a ${!currentStatus ? 'Aprobado' : 'Pendiente'}.`);
+            } catch (error) {
+                console.error("Error al actualizar el estado:", error);
+                showModal('Error', 'No se pudo actualizar el estado del requerimiento.');
+            }
+        };
+
+        initializeFirebase();
+
+    </script>
+</body>
+</html>
