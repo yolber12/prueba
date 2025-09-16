@@ -200,8 +200,8 @@
                 await uploadBytes(storageRef, imagenFile);
                 const imageUrl = await getDownloadURL(storageRef);
 
-                // Add document to Firestore
-                const docRef = doc(collection(db, `/artifacts/${appId}/users/${userId}/requerimientos`));
+                // Add document to Firestore in a public collection
+                const docRef = doc(collection(db, `/artifacts/${appId}/public/data/requerimientos`));
                 await setDoc(docRef, {
                     id: docRef.id,
                     titulo,
@@ -227,7 +227,7 @@
         // Function to listen for real-time updates from Firestore
         const listenForRequests = () => {
             const requestsList = document.getElementById('user-requests-list');
-            const collectionRef = collection(db, `/artifacts/${appId}/users/${userId}/requerimientos`);
+            const collectionRef = collection(db, `/artifacts/${appId}/public/data/requerimientos`);
             const q = query(collectionRef);
 
             onSnapshot(q, (snapshot) => {
@@ -318,7 +318,7 @@
         // This function will be called by the button in the dashboard
         window.toggleApproval = async (id, currentStatus) => {
             try {
-                const docRef = doc(db, `/artifacts/${appId}/users/${userId}/requerimientos`, id);
+                const docRef = doc(db, `/artifacts/${appId}/public/data/requerimientos`, id);
                 await updateDoc(docRef, { aprobado: !currentStatus });
                 showModal('Actualización', `El estado del requerimiento ha sido cambiado a ${!currentStatus ? 'Aprobado' : 'Pendiente'}.`);
             } catch (error) {
