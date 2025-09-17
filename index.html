@@ -47,6 +47,21 @@
         </div>
     </div>
 
+    <!-- Modal para seleccionar la fecha de publicación -->
+    <div id="date-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Seleccionar Fecha de Publicación</h3>
+                <button onclick="hideDateModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <label for="publish-date-input" class="block text-sm font-medium text-gray-700 mb-2">Fecha</label>
+            <input type="date" id="publish-date-input" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500 mb-4">
+            <div class="flex justify-end">
+                <button onclick="confirmDate()" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-600">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
     <div class="w-full max-w-6xl flex flex-col md:flex-row gap-6">
 
         <!-- Formulario para gestores -->
@@ -60,6 +75,24 @@
                 <div>
                     <label for="descripcion" class="block text-sm font-medium text-gray-700">Descripción</label>
                     <textarea id="descripcion" name="descripcion" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500" required></textarea>
+                </div>
+                <div>
+                    <label for="tipoContenido" class="block text-sm font-medium text-gray-700">Tipo de Contenido</label>
+                    <select id="tipoContenido" name="tipoContenido" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="post">Post de Instagram</option>
+                        <option value="historia">Historia de Instagram</option>
+                        <option value="anuncio">Anuncio de Facebook</option>
+                        <option value="tweet">Tweet</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="prioridad" class="block text-sm font-medium text-gray-700">Prioridad</label>
+                    <select id="prioridad" name="prioridad" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="baja">Baja</option>
+                        <option value="media">Media</option>
+                        <option value="alta">Alta</option>
+                    </select>
                 </div>
                 <div>
                     <label for="imagen" class="block text-sm font-medium text-gray-700">Subir Imagen</label>
@@ -120,6 +153,8 @@
         let storage;
         let userId = 'unknown';
         let userRole = 'unknown';
+        const ADMIN_EMAILS = ['yolberdesing@gmail.com', 'mercadeoturpialairlines@gmail.com'];
+        let pendingApprovalRequest = null;
 
         const initializeFirebase = async () => {
             try {
@@ -147,9 +182,8 @@
             auth.onAuthStateChanged(user => {
                 if (user) {
                     userId = user.uid;
-                    // For demo purposes, we define roles based on user ID.
-                    // In a real app, this would be retrieved from a database.
-                    userRole = (userId === 'admin-id-demo') ? 'administrador' : 'gestor';
+                    // Define roles based on user email.
+                    userRole = ADMIN_EMAILS.includes(user.email) ? 'administrador' : 'gestor';
                     document.getElementById('user-info').innerText = `ID de Usuario: ${userId}\nRol: ${userRole}`;
                     
                     if (userRole === 'administrador') {
@@ -176,12 +210,47 @@
             document.getElementById('modal').classList.remove('flex');
         };
 
+        const showDateModal = (req) => {
+            pendingApprovalRequest = req;
+            document.getElementById('date-modal').classList.remove('hidden');
+            document.getElementById('date-modal').classList.add('flex');
+        };
+
+        const hideDateModal = () => {
+            document.getElementById('date-modal').classList.add('hidden');
+            document.getElementById('date-modal').classList.remove('flex');
+        };
+
+        window.confirmDate = async () => {
+            const dateInput = document.getElementById('publish-date-input').value;
+            if (!dateInput) {
+                showModal('Error', 'Por favor, selecciona una fecha de publicación.');
+                return;
+            }
+            hideDateModal();
+            
+            try {
+                const docRef = doc(db, `/artifacts/${appId}/public/data/requerimientos`, pendingApprovalRequest.id);
+                await updateDoc(docRef, { 
+                    aprobado: true,
+                    fechaPublicacion: new Date(dateInput)
+                });
+                showModal('Actualización', `El requerimiento ha sido aprobado y programado para el ${dateInput}.`);
+            } catch (error) {
+                console.error("Error al actualizar el estado:", error);
+                showModal('Error', 'No se pudo actualizar el estado del requerimiento.');
+            }
+        };
+
+
         document.getElementById('requerimiento-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const form = e.target;
             const titulo = form.titulo.value;
             const descripcion = form.descripcion.value;
+            const tipoContenido = form.tipoContenido.value;
+            const prioridad = form.prioridad.value;
             const imagenFile = form.imagen.files[0];
 
             if (!imagenFile) {
@@ -202,12 +271,18 @@
 
                 // Add document to Firestore in a public collection
                 const docRef = doc(collection(db, `/artifacts/${appId}/public/data/requerimientos`));
+                
+                // Get user email safely, handling anonymous users
+                const userEmail = auth.currentUser ? auth.currentUser.email || 'correo-no-disponible' : 'correo-no-disponible';
+                
                 await setDoc(docRef, {
                     id: docRef.id,
                     titulo,
                     descripcion,
+                    tipoContenido,
+                    prioridad,
                     solicitanteId: userId,
-                    solicitanteEmail: auth.currentUser.email || 'correo-no-disponible',
+                    solicitanteEmail: userEmail,
                     imagenUrl: imageUrl,
                     aprobado: false,
                     fechaCreacion: new Date()
@@ -245,6 +320,8 @@
                 requests.forEach(req => {
                     const statusColor = req.aprobado ? 'text-green-600' : 'text-yellow-600';
                     const statusText = req.aprobado ? 'Aprobado' : 'Pendiente';
+                    const prioridadText = req.prioridad.charAt(0).toUpperCase() + req.prioridad.slice(1);
+                    const tipoContenidoText = req.tipoContenido.charAt(0).toUpperCase() + req.tipoContenido.slice(1);
 
                     const reqCard = document.createElement('div');
                     reqCard.className = 'bg-gray-50 rounded-lg p-4 shadow flex flex-col sm:flex-row justify-between items-start sm:items-center';
@@ -253,6 +330,10 @@
                             <p class="font-bold text-gray-800 text-lg">${req.titulo}</p>
                             <p class="text-gray-600 text-sm mb-2">${req.descripcion}</p>
                             <p class="text-xs font-medium text-gray-400">Solicitado por: ${req.solicitanteEmail}</p>
+                            <div class="flex items-center space-x-2 text-sm mt-2">
+                                <span class="bg-gray-200 text-gray-700 px-2 py-1 rounded-full">${tipoContenidoText}</span>
+                                <span class="bg-gray-200 text-gray-700 px-2 py-1 rounded-full">Prioridad: ${prioridadText}</span>
+                            </div>
                             <a href="${req.imagenUrl}" target="_blank" class="text-sm text-blue-500 hover:underline">Ver Imagen</a>
                         </div>
                         <div class="mt-4 sm:mt-0 flex items-center space-x-2">
@@ -291,7 +372,7 @@
                 let hasApproved = false;
                 
                 requests.forEach(req => {
-                    const reqDate = req.fechaCreacion.toDate();
+                    const reqDate = req.aprobado && req.fechaPublicacion ? req.fechaPublicacion.toDate() : req.fechaCreacion.toDate();
                     if (reqDate.getDate() === day && reqDate.getMonth() === today.getMonth() && reqDate.getFullYear() === today.getFullYear()) {
                         events.push(req);
                         if (req.aprobado) {
@@ -317,13 +398,24 @@
 
         // This function will be called by the button in the dashboard
         window.toggleApproval = async (id, currentStatus) => {
-            try {
-                const docRef = doc(db, `/artifacts/${appId}/public/data/requerimientos`, id);
-                await updateDoc(docRef, { aprobado: !currentStatus });
-                showModal('Actualización', `El estado del requerimiento ha sido cambiado a ${!currentStatus ? 'Aprobado' : 'Pendiente'}.`);
-            } catch (error) {
-                console.error("Error al actualizar el estado:", error);
-                showModal('Error', 'No se pudo actualizar el estado del requerimiento.');
+            const docRef = doc(db, `/artifacts/${appId}/public/data/requerimientos`, id);
+            
+            if (currentStatus) {
+                // Si ya está aprobado, lo desaprobamos y eliminamos la fecha de publicación
+                try {
+                    await updateDoc(docRef, { 
+                        aprobado: false,
+                        fechaPublicacion: null // Eliminar el campo si existe
+                    });
+                    showModal('Actualización', `El requerimiento ha sido marcado como Pendiente.`);
+                } catch (error) {
+                    console.error("Error al actualizar el estado:", error);
+                    showModal('Error', 'No se pudo actualizar el estado del requerimiento.');
+                }
+            } else {
+                // Si está pendiente, pedimos la fecha de publicación
+                const request = (await getDocs(query(collection(db, `/artifacts/${appId}/public/data/requerimientos`), where('id', '==', id)))).docs[0].data();
+                showDateModal(request);
             }
         };
 
