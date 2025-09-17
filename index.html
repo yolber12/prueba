@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -94,10 +94,6 @@
                         <option value="alta">Alta</option>
                     </select>
                 </div>
-                <div>
-                    <label for="imagen" class="block text-sm font-medium text-gray-700">Subir Imagen</label>
-                    <input type="file" id="imagen" name="imagen" class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" accept="image/*" required>
-                </div>
                 <button type="submit" class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
                     <span id="submit-text">Enviar</span>
                     <span id="loading-spinner" class="hidden animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full mx-auto"></span>
@@ -138,8 +134,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, onSnapshot, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-storage.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot, query, where, updateDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
         import { getApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
 
         // Firebase configuration and initialization (DO NOT MODIFY)
@@ -166,7 +161,6 @@
             }
             db = getFirestore(app);
             auth = getAuth(app);
-            storage = getStorage(app);
 
             // Authentication with custom token or anonymously
             try {
@@ -197,26 +191,27 @@
                 }
             });
         };
-
-        const showModal = (title, message) => {
+        
+        // Expose functions globally so they can be called from HTML onclick attributes
+        window.showModal = (title, message) => {
             document.getElementById('modal-title').innerText = title;
             document.getElementById('modal-message').innerText = message;
             document.getElementById('modal').classList.remove('hidden');
             document.getElementById('modal').classList.add('flex');
         };
 
-        const hideModal = () => {
+        window.hideModal = () => {
             document.getElementById('modal').classList.add('hidden');
             document.getElementById('modal').classList.remove('flex');
         };
 
-        const showDateModal = (req) => {
+        window.showDateModal = (req) => {
             pendingApprovalRequest = req;
             document.getElementById('date-modal').classList.remove('hidden');
             document.getElementById('date-modal').classList.add('flex');
         };
 
-        const hideDateModal = () => {
+        window.hideDateModal = () => {
             document.getElementById('date-modal').classList.add('hidden');
             document.getElementById('date-modal').classList.remove('flex');
         };
@@ -251,12 +246,8 @@
             const descripcion = form.descripcion.value;
             const tipoContenido = form.tipoContenido.value;
             const prioridad = form.prioridad.value;
-            const imagenFile = form.imagen.files[0];
-
-            if (!imagenFile) {
-                showModal('Error', 'Por favor, sube una imagen.');
-                return;
-            }
+            // Removed image file handling
+            // const imagenFile = form.imagen.files[0];
 
             const submitBtn = document.getElementById('submit-text');
             const loadingSpinner = document.getElementById('loading-spinner');
@@ -264,10 +255,10 @@
             loadingSpinner.classList.remove('hidden');
             
             try {
-                // Upload image to Firebase Storage
-                const storageRef = ref(storage, `contenido/${userId}/${Date.now()}_${imagenFile.name}`);
-                await uploadBytes(storageRef, imagenFile);
-                const imageUrl = await getDownloadURL(storageRef);
+                // No image upload needed
+                // const storageRef = ref(storage, `/artifacts/${appId}/users/${userId}/storage/requerimientos_imagenes/${Date.now()}_${imagenFile.name}`);
+                // await uploadBytes(storageRef, imagenFile);
+                // const imageUrl = await getDownloadURL(storageRef);
 
                 // Add document to Firestore in a public collection
                 const docRef = doc(collection(db, `/artifacts/${appId}/public/data/requerimientos`));
@@ -283,7 +274,7 @@
                     prioridad,
                     solicitanteId: userId,
                     solicitanteEmail: userEmail,
-                    imagenUrl: imageUrl,
+                    // No imagenUrl
                     aprobado: false,
                     fechaCreacion: new Date()
                 });
@@ -315,6 +306,7 @@
                     return;
                 }
                 
+                // Sort by creation date
                 requests.sort((a, b) => b.fechaCreacion.toDate() - a.fechaCreacion.toDate());
 
                 requests.forEach(req => {
@@ -334,7 +326,6 @@
                                 <span class="bg-gray-200 text-gray-700 px-2 py-1 rounded-full">${tipoContenidoText}</span>
                                 <span class="bg-gray-200 text-gray-700 px-2 py-1 rounded-full">Prioridad: ${prioridadText}</span>
                             </div>
-                            <a href="${req.imagenUrl}" target="_blank" class="text-sm text-blue-500 hover:underline">Ver Imagen</a>
                         </div>
                         <div class="mt-4 sm:mt-0 flex items-center space-x-2">
                             <span class="font-semibold ${statusColor}">${statusText}</span>
@@ -414,8 +405,14 @@
                 }
             } else {
                 // Si está pendiente, pedimos la fecha de publicación
-                const request = (await getDocs(query(collection(db, `/artifacts/${appId}/public/data/requerimientos`), where('id', '==', id)))).docs[0].data();
-                showDateModal(request);
+                const docsSnapshot = await getDocs(query(collection(db, `/artifacts/${appId}/public/data/requerimientos`), where('id', '==', id)));
+                if (docsSnapshot.docs.length > 0) {
+                    const request = docsSnapshot.docs[0].data();
+                    showDateModal(request);
+                } else {
+                    console.error("Documento no encontrado con el id:", id);
+                    showModal('Error', 'Documento de requerimiento no encontrado.');
+                }
             }
         };
 
