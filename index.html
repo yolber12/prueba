@@ -60,6 +60,26 @@
             font-size: 0.75rem;
             font-weight: bold;
         }
+        .sync-status {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-left: 1rem;
+        }
+        .sync-status.online .status-dot {
+            background-color: #10b981;
+        }
+        .sync-status.offline .status-dot {
+            background-color: #ef4444;
+        }
+        .sync-status .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            transition: background-color 0.3s;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -68,13 +88,19 @@
         <div class="container flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-900">Plataforma de Marketing</h1>
             <nav class="space-x-4 flex items-center">
-                <span id="user-id-display" class="text-sm text-gray-500 font-medium hidden"></span>
+                <div class="flex items-center space-x-2">
+                    <span id="user-id-display" class="text-sm text-gray-500 font-medium hidden"></span>
+                    <span id="sync-status" class="sync-status">
+                        <span class="status-dot"></span>
+                        <span id="sync-text">Desconectado</span>
+                    </span>
+                </div>
                 <button onclick="showModule('requirements')" class="nav-button text-gray-600 hover:text-blue-600 transition-colors duration-200 font-medium">Requerimientos</button>
                 <button onclick="showModule('approval')" class="nav-button text-gray-600 hover:text-blue-600 transition-colors duration-200 font-medium">Aprobación</button>
                 <button onclick="showModule('calendar')" class="nav-button text-gray-600 hover:text-blue-600 transition-colors duration-200 font-medium">Calendario</button>
                 <div class="notification-bell">
                     <svg id="bell-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C6.002 5.341 2 9.345 2 14.158v2.834L2.595 18H22a2 0 012 2v1H0v-1a2 2 0 012-2h4.595zM12 20a2 2 0 100-4 2 2 0 000 4z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C6.002 5.341 2 9.345 2 14.158v2.834L2.595 18H22a2 0 012 2v1H0v-1a2 0 012-2h4.595zM12 20a2 2 0 100-4 2 2 0 000 4z" />
                     </svg>
                     <span id="notification-count" class="notification-count" style="display: none;">0</span>
                 </div>
@@ -92,6 +118,15 @@
         <div id="login-module" class="module-container flex items-center justify-center">
             <div class="p-8 bg-white rounded-xl shadow-xl w-full max-w-sm text-center">
                 <h2 class="text-3xl font-bold mb-6 text-gray-900">Selecciona tu Rol</h2>
+                
+                <!-- Configuración de Base de Datos Remota -->
+                <div class="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <label for="remote-db-url" class="block text-sm font-medium text-gray-700 text-left mb-1">URL de la Base de Datos Remota</label>
+                    <input type="text" id="remote-db-url" placeholder="Ej: https://usuario:clave@mi-couchdb.com/db" class="w-full p-2 rounded-md border-gray-300 shadow-sm text-sm" value="https://dev-pouch.iriscouch.com/marketing_platform">
+                    <button onclick="connectToRemoteDB()" class="mt-2 w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors">Conectar</button>
+                    <p class="text-xs text-gray-500 mt-2 text-left">Utiliza tu propia URL de CouchDB o deja la de ejemplo.</p>
+                </div>
+                
                 <div class="space-y-4">
                     <button onclick="selectRole('admin')" class="w-full py-3 px-4 rounded-md shadow-sm text-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors">Administrador</button>
                     <button onclick="selectRole('community')" class="w-full py-3 px-4 rounded-md shadow-sm text-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors">Community Manager</button>
@@ -204,6 +239,7 @@
     <script>
         // --- INICIALIZACIÓN DE POUCHDB Y LA APLICACIÓN ---
         let db;
+        let remoteDB;
         let currentRole = null;
         let userData = {
             requirements: [],
@@ -213,39 +249,76 @@
         let userId;
 
         // Función de inicialización
-        function initPouchDB() {
+        window.connectToRemoteDB = function() {
+            const remoteDbUrl = document.getElementById('remote-db-url').value;
+            localStorage.setItem('remoteDbUrl', remoteDbUrl);
+            initPouchDB(remoteDbUrl);
+        };
+        
+        function initPouchDB(remoteDbUrl) {
+            console.log("Iniciando aplicación...");
             try {
                 // Generar un ID de usuario anónimo
                 userId = 'user_' + Math.random().toString(36).substr(2, 9);
                 document.getElementById('user-id-display').textContent = `ID de usuario: ${userId}`;
                 document.getElementById('user-id-display').style.display = 'block';
 
-                // Inicializar la base de datos PouchDB
-                db = new PouchDB('marketing_platform_db');
-                console.log("PouchDB inicializado.");
-                setupRealtimeListeners();
+                // Inicializar la base de datos local PouchDB
+                db = new PouchDB('marketing_platform_local_db');
+                console.log("PouchDB local inicializado correctamente.");
+                
+                // Configurar la base de datos remota para sincronización
+                if (remoteDbUrl) {
+                    remoteDB = new PouchDB(remoteDbUrl);
+                    console.log("Sincronizando con la base de datos remota:", remoteDbUrl);
+                    
+                    // Sincronización en tiempo real bidireccional
+                    db.sync(remoteDB, {
+                        live: true,
+                        retry: true
+                    }).on('change', function (change) {
+                        console.log('Cambio detectado en la sincronización:', change);
+                        fetchDataAndRender();
+                    }).on('paused', function (info) {
+                        console.log('Sincronización en pausa:', info);
+                        updateSyncStatus(false);
+                    }).on('active', function (info) {
+                        console.log('Sincronización activa:', info);
+                        updateSyncStatus(true);
+                    }).on('error', function (err) {
+                        console.error('Error de sincronización:', err);
+                        showToast("Error de conexión con la base de datos remota.");
+                        updateSyncStatus(false);
+                    });
+                } else {
+                    console.log("No se proporcionó una URL remota. Funcionando en modo local.");
+                    updateSyncStatus(false);
+                }
+
+                // Cargar los datos iniciales
+                fetchDataAndRender();
             } catch (error) {
                 console.error("Error al inicializar PouchDB:", error);
                 showToast("Error de inicialización de la base de datos.");
             }
         }
-        
-        function setupRealtimeListeners() {
-            if (!db) {
-                console.log("No se pudo configurar el oyente en tiempo real: db no está disponible.");
-                return;
+
+        function updateSyncStatus(isOnline) {
+            const syncStatus = document.getElementById('sync-status');
+            const syncText = document.getElementById('sync-text');
+            if (isOnline) {
+                syncStatus.classList.remove('offline');
+                syncStatus.classList.add('online');
+                syncText.textContent = 'En línea';
+            } else {
+                syncStatus.classList.remove('online');
+                syncStatus.classList.add('offline');
+                syncText.textContent = 'Desconectado';
             }
-            // Usar la API de 'changes' de PouchDB para escuchar actualizaciones en tiempo real
-            db.changes({ since: 'now', live: true, include_docs: true }).on('change', function (change) {
-                fetchDataAndRender();
-            }).on('error', function (err) {
-                console.error("Error en el oyente de PouchDB:", err);
-                showToast("Error de conexión a la base de datos.");
-            });
-            fetchDataAndRender(); // Cargar los datos iniciales
         }
 
         async function fetchDataAndRender() {
+            console.log("Obteniendo datos de la base de datos local...");
             try {
                 const result = await db.allDocs({ include_docs: true });
                 userData.requirements = result.rows.map(row => ({
@@ -253,6 +326,7 @@
                     ...row.doc
                 }));
                 console.log("Datos de requerimientos actualizados:", userData.requirements);
+                console.table(userData.requirements);
                 renderUI();
             } catch (error) {
                 console.error("Error al obtener documentos:", error);
@@ -368,14 +442,22 @@
 
         // --- Lógica de Requerimientos y Flujo de Trabajo (PouchDB) ---
         window.editRequirement = async function(id) {
-            const req = userData.requirements.find(r => r._id === id);
-            if (req) {
-                editingReqId = id;
-                document.getElementById('req-title').value = req.title;
-                document.getElementById('req-description').value = req.description;
-                document.getElementById('submit-req-button').textContent = "Guardar Cambios";
-                document.getElementById('req-form-title').textContent = "Editar Requerimiento";
-                showToast("Editando requerimiento...");
+            console.log("Iniciando edición de requerimiento:", id);
+            try {
+                const req = await db.get(id);
+                if (req) {
+                    editingReqId = id;
+                    document.getElementById('req-title').value = req.title;
+                    document.getElementById('req-description').value = req.description;
+                    document.getElementById('submit-req-button').textContent = "Guardar Cambios";
+                    document.getElementById('req-form-title').textContent = "Editar Requerimiento";
+                    showToast("Editando requerimiento...");
+                } else {
+                    console.error("Error: Requerimiento no encontrado para edición.");
+                }
+            } catch (e) {
+                console.error("Error al obtener documento para edición:", e);
+                showToast("Error: no se pudo encontrar el requerimiento.");
             }
         }
 
@@ -390,31 +472,34 @@
 
             try {
                 if (editingReqId) {
-                    const req = userData.requirements.find(r => r._id === editingReqId);
-                    if (req) {
-                         const updatedDoc = {
-                            _id: req._id,
-                            _rev: req._rev,
-                            title: title,
-                            description: description,
-                            status: req.status,
-                            createdDate: req.createdDate
-                        };
-                        await db.put(updatedDoc);
-                        showToast("Requerimiento actualizado correctamente.");
-                        editingReqId = null;
-                        document.getElementById('submit-req-button').textContent = "Enviar Requerimiento";
-                        document.getElementById('req-form-title').textContent = "Crear un Nuevo Requerimiento";
-                    }
+                    console.log("Actualizando requerimiento existente:", editingReqId);
+                    const req = await db.get(editingReqId);
+                    const updatedDoc = {
+                        _id: req._id,
+                        _rev: req._rev,
+                        title: title,
+                        description: description,
+                        status: req.status,
+                        createdDate: req.createdDate
+                    };
+                    await db.put(updatedDoc);
+                    showToast("Requerimiento actualizado correctamente.");
+                    editingReqId = null;
+                    document.getElementById('submit-req-button').textContent = "Enviar Requerimiento";
+                    document.getElementById('req-form-title').textContent = "Crear un Nuevo Requerimiento";
+                    console.log("Documento actualizado en la DB:", updatedDoc);
                 } else {
+                    console.log("Creando nuevo requerimiento.");
                     const newReq = {
+                        _id: new Date().toISOString(), // Usar ISO string como ID único
                         title: title,
                         description: description,
                         status: 'pending',
                         createdDate: new Date().toLocaleString()
                     };
-                    await db.post(newReq);
+                    await db.put(newReq); // Usar put para controlar _id
                     showToast("Requerimiento creado y enviado para el Community Manager.");
+                    console.log("Nuevo documento guardado en la DB:", newReq);
                 }
             } catch (e) {
                 console.error("Error al guardar en PouchDB:", e);
@@ -533,6 +618,7 @@
         }
 
         window.editRejectedContent = async function(id) {
+            console.log("Editando contenido rechazado para ID:", id);
             const form = document.getElementById(`upload-form-${id}`);
             if (form) {
                 form.classList.remove('hidden');
@@ -542,10 +628,12 @@
         }
 
         window.markAsInProgress = async function(id) {
+            console.log("Marcando requerimiento como 'En Proceso' para ID:", id);
             try {
                 const req = await db.get(id);
                 req.status = 'in-progress';
-                await db.put(req);
+                const result = await db.put(req);
+                console.log("Documento actualizado en la DB:", result);
                 showToast("Requerimiento marcado como 'En Proceso'.");
             } catch (e) {
                 console.error("Error al actualizar estado:", e);
@@ -561,14 +649,15 @@
                 showToast("Por favor, completa todos los campos.");
                 return;
             }
-
+            console.log("Marcando requerimiento como 'Listo para Aprobación' para ID:", id);
             try {
                 const req = await db.get(id);
                 req.status = 'ready-for-approval';
                 req.contentTitle = contentTitle;
                 req.contentDescription = contentDescription;
                 req.readyDate = new Date().toLocaleString();
-                await db.put(req);
+                const result = await db.put(req);
+                console.log("Documento actualizado en la DB:", result);
                 showToast('El requerimiento está listo para aprobación.');
             } catch (e) {
                 console.error("Error al actualizar estado:", e);
@@ -577,9 +666,11 @@
         }
 
         window.deleteApprovalItem = async function(id) {
+            console.log("Eliminando requerimiento con ID:", id);
             try {
                 const req = await db.get(id);
-                await db.remove(req);
+                const result = await db.remove(req);
+                console.log("Documento eliminado de la DB:", result);
                 showToast("Requerimiento eliminado.");
             } catch (e) {
                 console.error("Error al eliminar documento:", e);
@@ -641,10 +732,12 @@
         }
 
         window.updateApprovalStatus = async function(id, status) {
+            console.log("Actualizando estado de aprobación para ID:", id, "a", status);
             try {
                 const req = await db.get(id);
                 req.status = status;
-                await db.put(req);
+                const result = await db.put(req);
+                console.log("Documento actualizado en la DB:", result);
                 showToast(`Requerimiento ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'}.`);
             } catch (e) {
                 console.error("Error al actualizar estado:", e);
@@ -660,7 +753,7 @@
             } else if (currentRole === 'admin' || currentRole === 'analyst') {
                 count = userData.requirements.filter(r => r.status === 'ready-for-approval').length;
             }
-
+            console.log("Contando notificaciones para rol", currentRole, "Total:", count);
             if (count > 0) {
                 bell.textContent = count;
                 bell.style.display = 'inline';
@@ -670,6 +763,7 @@
         }
 
         function renderUI() {
+            console.log("Renderizando UI...");
             renderAdminRequirements();
             renderCommunityRequirements();
             renderApprovalQueue();
@@ -687,7 +781,7 @@
             if (!list) return;
             list.innerHTML = '';
             const approvedReqs = userData.requirements.filter(req => req.status === 'approved');
-            
+            console.log("Contenido aprobado para arrastrar:", approvedReqs);
             if (approvedReqs.length === 0) {
                 list.innerHTML = `<p class="text-center text-gray-500 mt-8">No hay contenido aprobado.</p>`;
             } else {
@@ -773,7 +867,14 @@
         }
         
         window.onload = function() {
-            initPouchDB();
+            const remoteDbUrl = localStorage.getItem('remoteDbUrl');
+            if (remoteDbUrl) {
+                document.getElementById('remote-db-url').value = remoteDbUrl;
+                initPouchDB(remoteDbUrl);
+            } else {
+                // Initial setup for a fresh start
+                initPouchDB(null);
+            }
             renderCalendar();
         };
     </script>
