@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -23,6 +23,7 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             padding: 2rem;
             animation: fadeIn 0.5s ease-in-out;
+            display: none;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -62,10 +63,12 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
+
     <div id="navbar" class="bg-white shadow-sm p-4 sticky top-0 z-50 hidden">
         <div class="container flex justify-between items-center">
             <h1 class="text-2xl font-bold text-gray-900">Plataforma de Marketing</h1>
             <nav class="space-x-4 flex items-center">
+                <span id="user-id-display" class="text-sm text-gray-500 font-medium hidden"></span>
                 <button onclick="showModule('requirements')" class="nav-button text-gray-600 hover:text-blue-600 transition-colors duration-200 font-medium">Requerimientos</button>
                 <button onclick="showModule('approval')" class="nav-button text-gray-600 hover:text-blue-600 transition-colors duration-200 font-medium">Aprobación</button>
                 <button onclick="showModule('calendar')" class="nav-button text-gray-600 hover:text-blue-600 transition-colors duration-200 font-medium">Calendario</button>
@@ -103,7 +106,7 @@
         </div>
 
         <!-- Módulo de Requerimientos -->
-        <div id="requirements-module" class="module-container" style="display: none;">
+        <div id="requirements-module" class="module-container">
             <h2 class="text-3xl font-bold mb-6 text-gray-900">Gestión de Requerimientos</h2>
             <!-- Vista de Administrador/Analista -->
             <div id="req-admin-view" class="grid md:grid-cols-2 gap-8 hidden">
@@ -126,7 +129,7 @@
                 <div class="p-6 bg-white border border-gray-200 rounded-xl">
                     <h3 class="text-xl font-semibold mb-4">Requerimientos Solicitados</h3>
                     <div id="requirements-list" class="space-y-4">
-                        <p class="text-center text-gray-500 mt-8">No hay requerimientos en este momento.</p>
+                        <p class="text-center text-gray-500 mt-8">Cargando requerimientos...</p>
                     </div>
                 </div>
             </div>
@@ -135,39 +138,31 @@
             <div id="req-community-view" class="p-6 bg-white border border-gray-200 rounded-xl hidden">
                 <h3 class="text-xl font-semibold mb-4">Mis Tareas de Requerimientos Pendientes</h3>
                 <div id="community-requirements-list" class="space-y-4">
-                    <p class="text-center text-gray-500 mt-8">No tienes tareas pendientes en este momento.</p>
+                    <p class="text-center text-gray-500 mt-8">Cargando tareas...</p>
                 </div>
             </div>
         </div>
 
         <!-- Módulo de Aprobación de Contenido -->
-        <div id="approval-module" class="module-container" style="display: none;">
+        <div id="approval-module" class="module-container">
             <h2 class="text-3xl font-bold mb-6 text-gray-900">Aprobación de Contenido</h2>
             <div id="approval-queue-container" class="p-6 bg-white border border-gray-200 rounded-xl">
                 <h3 class="text-xl font-semibold mb-4">Contenido para Revisión</h3>
                 <div id="approval-queue" class="space-y-4">
-                    <div class="bg-gray-200 text-gray-600 p-4 rounded-md shadow-sm text-center">No hay contenido para revisar.</div>
+                    <div class="bg-gray-200 text-gray-600 p-4 rounded-md shadow-sm text-center">Cargando contenido...</div>
                 </div>
             </div>
         </div>
 
         <!-- Módulo de Calendario y Coordinación -->
-        <div id="calendar-module" class="module-container" style="display: none;">
+        <div id="calendar-module" class="module-container">
             <h2 class="text-3xl font-bold mb-6 text-gray-900">Calendario de Publicaciones</h2>
             <div class="grid lg:grid-cols-4 gap-8">
                 <!-- Lista de Contenido Arrastrable (Aprobado) -->
                 <div class="lg:col-span-1 p-6 bg-gray-50 border border-gray-200 rounded-xl">
                     <h3 class="text-xl font-semibold mb-4 text-gray-900">Contenido Aprobado</h3>
                     <div id="approved-content-list" class="space-y-4">
-                        <!-- Contenido aprobado se renderiza aquí -->
-                        <div class="draggable-item bg-white p-4 rounded-md shadow" draggable="true">
-                            <p class="font-bold">Campaña de Verano</p>
-                            <p class="text-sm text-gray-500">Imágenes y videos de productos de verano.</p>
-                        </div>
-                        <div class="draggable-item bg-white p-4 rounded-md shadow" draggable="true">
-                            <p class="font-bold">Anuncio de Oferta</p>
-                            <p class="text-sm text-gray-500">Diseño gráfico para redes sociales sobre nuevas ofertas.</p>
-                        </div>
+                        <p class="text-center text-gray-500 mt-8">No hay contenido aprobado.</p>
                     </div>
                 </div>
 
@@ -205,13 +200,68 @@
         <span id="toast-message"></span>
     </div>
 
+    <script src="https://unpkg.com/pouchdb@8.0.1/dist/pouchdb.min.js"></script>
     <script>
-        // --- INICIALIZACIÓN DE LA APLICACIÓN ---
+        // --- INICIALIZACIÓN DE POUCHDB Y LA APLICACIÓN ---
+        let db;
         let currentRole = null;
-        let requirements = JSON.parse(localStorage.getItem('requirements')) || [];
+        let userData = {
+            requirements: [],
+            approvedContent: []
+        };
         let editingReqId = null;
+        let userId;
 
-        function showToast(message) {
+        // Función de inicialización
+        function initPouchDB() {
+            try {
+                // Generar un ID de usuario anónimo
+                userId = 'user_' + Math.random().toString(36).substr(2, 9);
+                document.getElementById('user-id-display').textContent = `ID de usuario: ${userId}`;
+                document.getElementById('user-id-display').style.display = 'block';
+
+                // Inicializar la base de datos PouchDB
+                db = new PouchDB('marketing_platform_db');
+                console.log("PouchDB inicializado.");
+                setupRealtimeListeners();
+            } catch (error) {
+                console.error("Error al inicializar PouchDB:", error);
+                showToast("Error de inicialización de la base de datos.");
+            }
+        }
+        
+        function setupRealtimeListeners() {
+            if (!db) {
+                console.log("No se pudo configurar el oyente en tiempo real: db no está disponible.");
+                return;
+            }
+            // Usar la API de 'changes' de PouchDB para escuchar actualizaciones en tiempo real
+            db.changes({ since: 'now', live: true, include_docs: true }).on('change', function (change) {
+                fetchDataAndRender();
+            }).on('error', function (err) {
+                console.error("Error en el oyente de PouchDB:", err);
+                showToast("Error de conexión a la base de datos.");
+            });
+            fetchDataAndRender(); // Cargar los datos iniciales
+        }
+
+        async function fetchDataAndRender() {
+            try {
+                const result = await db.allDocs({ include_docs: true });
+                userData.requirements = result.rows.map(row => ({
+                    id: row.doc._id,
+                    ...row.doc
+                }));
+                console.log("Datos de requerimientos actualizados:", userData.requirements);
+                renderUI();
+            } catch (error) {
+                console.error("Error al obtener documentos:", error);
+                showToast("Error al cargar los datos.");
+            }
+        }
+
+        // --- FUNCIONES DE LA APLICACIÓN ---
+        window.showToast = function(message) {
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toast-message');
             toastMessage.textContent = message;
@@ -221,17 +271,22 @@
             }, 3000);
         }
 
-        function showModule(moduleName) {
+        window.showModule = function(moduleName) {
             const modules = ['login', 'requirements', 'approval', 'calendar'];
             modules.forEach(module => {
-                document.getElementById(module + '-module').style.display = 'none';
+                const element = document.getElementById(module + '-module');
+                if (element) {
+                    element.style.display = 'none';
+                }
             });
-            document.getElementById(moduleName + '-module').style.display = 'flex';
-            updateNotificationBell();
-            renderUI();
+            const selectedModule = document.getElementById(moduleName + '-module');
+            if (selectedModule) {
+                selectedModule.style.display = 'flex';
+                updateNotificationBell();
+            }
         }
 
-        function showWelcomeBanner() {
+        window.showWelcomeBanner = function() {
             const banner = document.getElementById('welcome-banner');
             const message = document.getElementById('welcome-message');
             let roleName = '';
@@ -256,7 +311,7 @@
             }, 3000);
         }
 
-        function selectRole(role) {
+        window.selectRole = function(role) {
             currentRole = role;
             const passwordSection = document.getElementById('password-section');
             if (role === 'admin') {
@@ -268,14 +323,14 @@
             }
         }
         
-        function login() {
+        window.login = function() {
             const passwordInput = document.getElementById('password-input');
             const passwordError = document.getElementById('password-error');
             
             if (currentRole === 'admin' && passwordInput.value === 'admin') {
                 passwordError.style.display = 'none';
                 handleLoginSuccess();
-            } else if (currentRole === 'analyst' || currentRole === 'community') {
+            } else if (currentRole !== 'admin') {
                 passwordError.style.display = 'none';
                 handleLoginSuccess();
             } else {
@@ -283,13 +338,10 @@
             }
         }
         
-        function handleLoginSuccess() {
+        window.handleLoginSuccess = function() {
             document.getElementById('login-module').style.display = 'none';
             document.getElementById('navbar').style.display = 'flex';
             
-            const navRequirements = document.getElementById('nav-requirements');
-            const navApproval = document.getElementById('nav-approval');
-            const navCalendar = document.getElementById('nav-calendar');
             const reqAdminView = document.getElementById('req-admin-view');
             const reqCommunityView = document.getElementById('req-community-view');
             
@@ -306,7 +358,7 @@
             showWelcomeBanner();
         }
         
-        function logout() {
+        window.logout = function() {
             currentRole = null;
             document.getElementById('navbar').style.display = 'none';
             document.getElementById('password-input').value = '';
@@ -314,13 +366,9 @@
             showModule('login');
         }
 
-        // --- Lógica de Requerimientos y Flujo de Trabajo ---
-        function generateId() {
-            return '_' + Math.random().toString(36).substr(2, 9);
-        }
-
-        function editRequirement(id) {
-            const req = requirements.find(r => r.id === id);
+        // --- Lógica de Requerimientos y Flujo de Trabajo (PouchDB) ---
+        window.editRequirement = async function(id) {
+            const req = userData.requirements.find(r => r._id === id);
             if (req) {
                 editingReqId = id;
                 document.getElementById('req-title').value = req.title;
@@ -331,49 +379,59 @@
             }
         }
 
-        function submitRequest() {
+        window.submitRequest = async function() {
             const title = document.getElementById('req-title').value;
             const description = document.getElementById('req-description').value;
-
+            
             if (!title || !description) {
                 showToast("Por favor, completa todos los campos.");
                 return;
             }
 
-            if (editingReqId) {
-                const reqIndex = requirements.findIndex(r => r.id === editingReqId);
-                if (reqIndex !== -1) {
-                    requirements[reqIndex].title = title;
-                    requirements[reqIndex].description = description;
-                    showToast("Requerimiento actualizado correctamente.");
+            try {
+                if (editingReqId) {
+                    const req = userData.requirements.find(r => r._id === editingReqId);
+                    if (req) {
+                         const updatedDoc = {
+                            _id: req._id,
+                            _rev: req._rev,
+                            title: title,
+                            description: description,
+                            status: req.status,
+                            createdDate: req.createdDate
+                        };
+                        await db.put(updatedDoc);
+                        showToast("Requerimiento actualizado correctamente.");
+                        editingReqId = null;
+                        document.getElementById('submit-req-button').textContent = "Enviar Requerimiento";
+                        document.getElementById('req-form-title').textContent = "Crear un Nuevo Requerimiento";
+                    }
+                } else {
+                    const newReq = {
+                        title: title,
+                        description: description,
+                        status: 'pending',
+                        createdDate: new Date().toLocaleString()
+                    };
+                    await db.post(newReq);
+                    showToast("Requerimiento creado y enviado para el Community Manager.");
                 }
-                editingReqId = null;
-                document.getElementById('submit-req-button').textContent = "Enviar Requerimiento";
-                document.getElementById('req-form-title').textContent = "Crear un Nuevo Requerimiento";
-            } else {
-                const newReq = {
-                    id: generateId(),
-                    title: title,
-                    description: description,
-                    status: 'pending',
-                    createdDate: new Date().toLocaleString()
-                };
-                requirements.push(newReq);
-                showToast("Requerimiento creado y enviado para el Community Manager.");
+            } catch (e) {
+                console.error("Error al guardar en PouchDB:", e);
+                showToast("Error al guardar el requerimiento.");
             }
-            localStorage.setItem('requirements', JSON.stringify(requirements));
             document.getElementById('request-form').reset();
-            renderUI();
         }
 
         function renderAdminRequirements() {
             const list = document.getElementById('requirements-list');
+            if (!list) return;
             list.innerHTML = '';
             
-            if (requirements.length === 0) {
+            if (userData.requirements.length === 0) {
                 list.innerHTML = `<p class="text-center text-gray-500 mt-8">No hay requerimientos en este momento.</p>`;
             } else {
-                requirements.forEach(req => {
+                userData.requirements.forEach(req => {
                     let statusColor = '';
                     switch (req.status) {
                         case 'pending':
@@ -404,7 +462,7 @@
                         </div>
                         <div class="mt-2 sm:mt-0 flex items-center space-x-2">
                             <span class="text-xs font-semibold px-2 py-1 rounded-full ${statusColor}">${req.status.replace('-', ' ')}</span>
-                            <button onclick="editRequirement('${req.id}')" class="py-1 px-3 rounded-md text-sm font-medium text-white bg-gray-500 hover:bg-gray-600">Editar</button>
+                            <button onclick="editRequirement('${req._id}')" class="py-1 px-3 rounded-md text-sm font-medium text-white bg-gray-500 hover:bg-gray-600">Editar</button>
                         </div>
                     `;
                     list.appendChild(item);
@@ -414,8 +472,9 @@
 
         function renderCommunityRequirements() {
             const list = document.getElementById('community-requirements-list');
+            if (!list) return;
             list.innerHTML = '';
-            const pendingReqs = requirements.filter(req => req.status === 'pending' || req.status === 'in-progress' || req.status === 'rejected');
+            const pendingReqs = userData.requirements.filter(req => req.status === 'pending' || req.status === 'in-progress' || req.status === 'rejected');
             if (pendingReqs.length === 0) {
                 list.innerHTML = `<p class="text-center text-gray-500 mt-8">No tienes tareas pendientes en este momento.</p>`;
             } else {
@@ -430,17 +489,16 @@
                     switch (req.status) {
                         case 'pending':
                             statusText = 'Pendiente';
-                            buttonHtml = `<button onclick="markAsInProgress('${req.id}')" class="mt-2 py-1 px-3 rounded-md text-sm font-medium text-white bg-orange-500 hover:bg-orange-600">En Proceso</button>`;
+                            buttonHtml = `<button onclick="markAsInProgress('${req._id}')" class="mt-2 py-1 px-3 rounded-md text-sm font-medium text-white bg-orange-500 hover:bg-orange-600">En Proceso</button>`;
                             break;
                         case 'in-progress':
                             statusText = 'En Proceso';
                             buttonHtml = `
                                 <div class="mt-4 border-t pt-4">
                                     <p class="text-sm font-semibold mb-2">Sube tu archivo para aprobación</p>
-                                    <form id="upload-form-${req.id}" class="space-y-2" onsubmit="event.preventDefault(); markAsReady('${req.id}')">
-                                        <input type="text" id="content-title-${req.id}" placeholder="Título del contenido" class="w-full p-2 rounded-md border-gray-300">
-                                        <textarea id="content-description-${req.id}" placeholder="Descripción del contenido" rows="2" class="w-full p-2 rounded-md border-gray-300"></textarea>
-                                        <input type="file" id="content-upload-${req.id}" accept="image/*,video/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                    <form id="upload-form-${req._id}" class="space-y-2" onsubmit="event.preventDefault(); markAsReady('${req._id}')">
+                                        <input type="text" id="content-title-${req._id}" placeholder="Título del contenido" class="w-full p-2 rounded-md border-gray-300">
+                                        <textarea id="content-description-${req._id}" placeholder="Descripción del contenido" rows="2" class="w-full p-2 rounded-md border-gray-300"></textarea>
                                         <button type="submit" class="w-full py-2 px-4 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700">Listo para Aprobación</button>
                                     </form>
                                 </div>
@@ -452,11 +510,10 @@
                             buttonHtml = `
                                 <div class="mt-4 border-t pt-4">
                                     <p class="text-sm font-semibold text-red-600 mb-2">Este contenido fue rechazado. Edítalo y reenvíalo.</p>
-                                    <button onclick="editRejectedContent('${req.id}')" class="py-2 px-4 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Editar Contenido</button>
-                                    <form id="upload-form-${req.id}" class="space-y-2 mt-4 hidden" onsubmit="event.preventDefault(); markAsReady('${req.id}')">
-                                        <input type="text" id="content-title-${req.id}" placeholder="Título del contenido" class="w-full p-2 rounded-md border-gray-300" value="${req.contentTitle || ''}">
-                                        <textarea id="content-description-${req.id}" placeholder="Descripción del contenido" rows="2" class="w-full p-2 rounded-md border-gray-300">${req.contentDescription || ''}</textarea>
-                                        <input type="file" id="content-upload-${req.id}" accept="image/*,video/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                                    <button onclick="editRejectedContent('${req._id}')" class="py-2 px-4 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">Editar Contenido</button>
+                                    <form id="upload-form-${req._id}" class="space-y-2 mt-4 hidden" onsubmit="event.preventDefault(); markAsReady('${req._id}')">
+                                        <input type="text" id="content-title-${req._id}" placeholder="Título del contenido" class="w-full p-2 rounded-md border-gray-300" value="${req.contentTitle || ''}">
+                                        <textarea id="content-description-${req._id}" placeholder="Descripción del contenido" rows="2" class="w-full p-2 rounded-md border-gray-300">${req.contentDescription || ''}</textarea>
                                         <button type="submit" class="w-full py-2 px-4 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700">Listo para Aprobación</button>
                                     </form>
                                 </div>
@@ -475,7 +532,7 @@
             }
         }
 
-        function editRejectedContent(id) {
+        window.editRejectedContent = async function(id) {
             const form = document.getElementById(`upload-form-${id}`);
             if (form) {
                 form.classList.remove('hidden');
@@ -484,55 +541,57 @@
             }
         }
 
-        function markAsInProgress(id) {
-            const req = requirements.find(r => r.id === id);
-            if (req) {
+        window.markAsInProgress = async function(id) {
+            try {
+                const req = await db.get(id);
                 req.status = 'in-progress';
-                localStorage.setItem('requirements', JSON.stringify(requirements));
+                await db.put(req);
                 showToast("Requerimiento marcado como 'En Proceso'.");
-                renderUI();
+            } catch (e) {
+                console.error("Error al actualizar estado:", e);
+                showToast("Error al actualizar el estado.");
             }
         }
 
-        function markAsReady(id) {
-            const req = requirements.find(r => r.id === id);
-            if (req) {
-                const title = document.getElementById(`content-title-${id}`).value;
-                const description = document.getElementById(`content-description-${id}`).value;
-                const fileInput = document.getElementById(`content-upload-${id}`);
-                
-                const fileUrl = fileInput.files[0] ? URL.createObjectURL(fileInput.files[0]) : null;
-                const fileType = fileInput.files[0] ? fileInput.files[0].type : null;
+        window.markAsReady = async function(id) {
+            const contentTitle = document.getElementById(`content-title-${id}`).value;
+            const contentDescription = document.getElementById(`content-description-${id}`).value;
 
-                if (!title || !description) {
-                    showToast("Por favor, completa todos los campos.");
-                    return;
-                }
-                
+            if (!contentTitle || !contentDescription) {
+                showToast("Por favor, completa todos los campos.");
+                return;
+            }
+
+            try {
+                const req = await db.get(id);
                 req.status = 'ready-for-approval';
-                req.contentTitle = title;
-                req.contentDescription = description;
+                req.contentTitle = contentTitle;
+                req.contentDescription = contentDescription;
                 req.readyDate = new Date().toLocaleString();
-                req.fileUrl = fileUrl;
-                req.fileType = fileType;
-                
-                localStorage.setItem('requirements', JSON.stringify(requirements));
+                await db.put(req);
                 showToast('El requerimiento está listo para aprobación.');
-                renderUI();
+            } catch (e) {
+                console.error("Error al actualizar estado:", e);
+                showToast("Error al actualizar el estado.");
             }
         }
 
-        function deleteApprovalItem(id) {
-            requirements = requirements.filter(req => req.id !== id);
-            localStorage.setItem('requirements', JSON.stringify(requirements));
-            showToast("Requerimiento eliminado.");
-            renderUI();
+        window.deleteApprovalItem = async function(id) {
+            try {
+                const req = await db.get(id);
+                await db.remove(req);
+                showToast("Requerimiento eliminado.");
+            } catch (e) {
+                console.error("Error al eliminar documento:", e);
+                showToast("Error al eliminar el requerimiento.");
+            }
         }
         
         function renderApprovalQueue() {
             const queue = document.getElementById('approval-queue');
+            if (!queue) return;
             queue.innerHTML = '';
-            const allReqs = requirements.filter(req => ['ready-for-approval', 'approved', 'rejected'].includes(req.status));
+            const allReqs = userData.requirements.filter(req => ['ready-for-approval', 'approved', 'rejected'].includes(req.status));
 
             if (allReqs.length === 0) {
                 queue.innerHTML = `<div class="bg-gray-200 text-gray-600 p-4 rounded-md shadow-sm text-center">No hay contenido para revisar.</div>`;
@@ -544,16 +603,7 @@
                     let statusText = '';
                     let statusColor = '';
                     let actionButtons = '';
-                    let mediaHtml = '';
-
-                    if (req.fileUrl) {
-                        if (req.fileType && req.fileType.startsWith('image/')) {
-                            mediaHtml = `<img src="${req.fileUrl}" class="rounded-lg shadow w-full mt-4" alt="Vista previa del contenido">`;
-                        } else if (req.fileType && req.fileType.startsWith('video/')) {
-                            mediaHtml = `<video src="${req.fileUrl}" controls class="rounded-lg shadow w-full mt-4"></video>`;
-                        }
-                    }
-
+                    
                     switch (req.status) {
                         case 'ready-for-approval':
                             statusText = 'Pendiente de Revisión';
@@ -572,17 +622,16 @@
                     if (currentRole === 'admin' || currentRole === 'analyst') {
                         actionButtons = `
                             <div class="mt-2 flex space-x-2 self-end">
-                                <button onclick="updateApprovalStatus('${req.id}', 'approved')" class="py-1 px-3 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700">Aprobar</button>
-                                <button onclick="updateApprovalStatus('${req.id}', 'rejected')" class="py-1 px-3 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">Rechazar</button>
+                                <button onclick="updateApprovalStatus('${req._id}', 'approved')" class="py-1 px-3 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700">Aprobar</button>
+                                <button onclick="updateApprovalStatus('${req._id}', 'rejected')" class="py-1 px-3 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700">Rechazar</button>
                             </div>
                         `;
                     }
                     
                     item.innerHTML = `
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute top-2 right-2 text-gray-400 hover:text-red-600 cursor-pointer transition-colors duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" onclick="deleteApprovalItem('${req.id}')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        ${mediaHtml}
-                        <p class="font-bold mt-4">${req.contentTitle}</p>
-                        <p class="text-sm text-gray-500">Descripción: ${req.contentDescription}</p>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 absolute top-2 right-2 text-gray-400 hover:text-red-600 cursor-pointer transition-colors duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" onclick="deleteApprovalItem('${req._id}')"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        <p class="font-bold mt-4">${req.contentTitle || 'Sin Título'}</p>
+                        <p class="text-sm text-gray-500">Descripción: ${req.contentDescription || 'Sin descripción'}</p>
                         <p class="mt-2 text-xs font-semibold ${statusColor}">Estado: ${statusText}</p>
                         ${actionButtons}
                     `;
@@ -591,13 +640,15 @@
             }
         }
 
-        function updateApprovalStatus(id, status) {
-            const req = requirements.find(r => r.id === id);
-            if (req) {
+        window.updateApprovalStatus = async function(id, status) {
+            try {
+                const req = await db.get(id);
                 req.status = status;
-                localStorage.setItem('requirements', JSON.stringify(requirements));
-                showToast(`Requerimiento ${req.contentTitle} ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'}.`);
-                renderUI();
+                await db.put(req);
+                showToast(`Requerimiento ha sido ${status === 'approved' ? 'aprobado' : 'rechazado'}.`);
+            } catch (e) {
+                console.error("Error al actualizar estado:", e);
+                showToast("Error al actualizar el estado.");
             }
         }
 
@@ -605,9 +656,9 @@
             const bell = document.getElementById('notification-count');
             let count = 0;
             if (currentRole === 'community') {
-                count = requirements.filter(r => r.status === 'pending' || r.status === 'rejected').length;
+                count = userData.requirements.filter(r => r.status === 'pending' || r.status === 'rejected').length;
             } else if (currentRole === 'admin' || currentRole === 'analyst') {
-                count = requirements.filter(r => r.status === 'ready-for-approval').length;
+                count = userData.requirements.filter(r => r.status === 'ready-for-approval').length;
             }
 
             if (count > 0) {
@@ -623,14 +674,45 @@
             renderCommunityRequirements();
             renderApprovalQueue();
             updateNotificationBell();
+            renderApprovedContent();
         }
 
-        // --- Lógica de Calendario ---
+        // --- Lógica de Calendario y Contenido Aprobado ---
         const today = new Date();
         let currentMonth = today.getMonth();
         let currentYear = today.getFullYear();
         
-        function renderCalendar() {
+        function renderApprovedContent() {
+            const list = document.getElementById('approved-content-list');
+            if (!list) return;
+            list.innerHTML = '';
+            const approvedReqs = userData.requirements.filter(req => req.status === 'approved');
+            
+            if (approvedReqs.length === 0) {
+                list.innerHTML = `<p class="text-center text-gray-500 mt-8">No hay contenido aprobado.</p>`;
+            } else {
+                approvedReqs.forEach(req => {
+                    const item = document.createElement('div');
+                    item.className = "draggable-item bg-white p-4 rounded-md shadow";
+                    item.setAttribute('draggable', 'true');
+                    item.setAttribute('data-content-title', req.contentTitle);
+                    item.setAttribute('data-content-desc', req.contentDescription);
+                    item.innerHTML = `
+                        <p class="font-bold">${req.contentTitle}</p>
+                        <p class="text-sm text-gray-500">${req.contentDescription}</p>
+                    `;
+                    item.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', JSON.stringify({
+                            title: req.contentTitle,
+                            description: req.contentDescription
+                        }));
+                    });
+                    list.appendChild(item);
+                });
+            }
+        }
+
+        window.renderCalendar = function() {
             const calendarGrid = document.getElementById('calendar-grid');
             const monthYearText = document.getElementById('current-month-year');
             const date = new Date(currentYear, currentMonth, 1);
@@ -662,15 +744,23 @@
                 dayCell.addEventListener('drop', (e) => {
                     e.preventDefault();
                     dayCell.classList.remove('drag-over');
-                    const draggableElement = e.dataTransfer.getData('text/html');
-                    dayCell.innerHTML += draggableElement;
+                    try {
+                        const droppedData = JSON.parse(e.dataTransfer.getData('text/plain'));
+                        const droppedItem = document.createElement('div');
+                        droppedItem.className = "bg-blue-100 p-2 rounded-md text-sm mt-2";
+                        droppedItem.innerHTML = `<p class="font-bold">${droppedData.title}</p><p class="text-xs text-gray-600">${droppedData.description}</p>`;
+                        dayCell.appendChild(droppedItem);
+                    } catch (error) {
+                        console.error("Error al soltar el elemento:", error);
+                        showToast("Error al soltar el elemento. Por favor, intenta de nuevo.");
+                    }
                 });
 
                 calendarGrid.appendChild(dayCell);
             }
         }
 
-        function changeMonth(direction) {
+        window.changeMonth = function(direction) {
             currentMonth += direction;
             if (currentMonth < 0) {
                 currentMonth = 11;
@@ -683,13 +773,8 @@
         }
         
         window.onload = function() {
+            initPouchDB();
             renderCalendar();
-            const items = document.querySelectorAll('.draggable-item');
-            items.forEach(item => {
-                item.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('text/html', e.target.outerHTML);
-                });
-            });
         };
     </script>
 </body>
